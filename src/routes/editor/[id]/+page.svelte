@@ -3,12 +3,20 @@
   import { onMount } from "svelte";
   import { projectStore, type Project, type Subtitle } from "$lib/stores/projectStore.svelte";
   import SubtitleEditorComponent from "$lib/components/editor/subtitle-editor.svelte";
-  import { Button } from "$lib/components/ui/button";
-  import { Loader2, Play, Pause, Save, ArrowLeft, Download } from "lucide-svelte";
-  import { Badge } from "$lib/components/ui/badge";
-
-  // Logic imports
   import { transcribeOffline } from "$lib/services/transcriptionService";
+
+  // Design System
+  import LiquidBackground from "$lib/components/ui/liquid/LiquidBackground.svelte";
+  import GlassPanel from "$lib/components/ui/liquid/GlassPanel.svelte";
+  import LiquidButton from "$lib/components/ui/liquid/LiquidButton.svelte";
+
+  // Icons
+  import {
+    ArrowLeft, Type, Languages, Music, LayoutGrid, User,
+    Star, Share2, MoreHorizontal, Sparkles, X, Plus,
+    ChevronLeft, ChevronRight, Play, Pause, SkipBack, SkipForward,
+    Settings, Grid, Maximize2, Send, Activity, Loader2, Download
+  } from 'lucide-svelte';
 
   let projectId = $page.params.id;
   let mode = $page.url.searchParams.get("mode") as "online" | "offline" || "online";
@@ -18,6 +26,9 @@
   let isTranscribing = $state(false);
   let transcriptionProgress = $state(0);
   let transcriptionStatus = $state("");
+
+  // UI State
+  let activeTab = $state('subtitles');
 
   // Video Player State
   let videoEl = $state<HTMLVideoElement>();
@@ -29,6 +40,8 @@
 
   onMount(async () => {
     if (!projectId) return;
+
+    // Ensure we load projects first to handle the merge/load logic
     await projectStore.loadProjects();
     project = await projectStore.getProject(projectId);
     isLoading = false;
@@ -43,37 +56,15 @@
      isTranscribing = true;
 
      try {
-         // Check if we have a file "attached" to memory or need to ask user
-         // Since we can't persist File objects easily, for this demo we might need to Mock the file
-         // OR check if we have a way to retrieve it.
-         // Real world: fetch(project.mediaUrl) -> Blob -> File.
-
-         // DEMO HACK: If project name ends with .mp4/.mp3 etc, we assume it's a file.
-         // If we don't have the file blob, we can't run Transformers.js on it.
-         // We will prompt the user to re-select the file if it's missing from memory/blob-url invalid.
-
-         // For the sake of this environment where I can't interactively select files easily in the persistent way:
-         // I will download a sample video if one isn't present, or simulate the transcription.
-
          if (mode === 'offline') {
-             transcriptionStatus = "Loading Model (this may take a while)...";
-             // We need a file. Let's create a dummy one or fail gracefully.
-             // In a real flow, the Blob URL would be valid for the session.
+             transcriptionStatus = "Loading Local AI...";
 
-             // SIMULATION FOR OFFLINE:
-             // Since we can't easily pass the File object from the previous route without a shared store (and page reload kills it),
-             // I will implement the 'transcribeOffline' to accept a URL if possible, or fail.
-             // If we are in the same session, maybe we can use a Singleton store for 'currentUpload'.
-
-             // Let's assume for this specific task, we want to see the UI working.
-             // I'll call the service.
-
-             // Fallback to sample if no mediaUrl
+             // Fallback/Simulated file handling
              const mediaSource = project.mediaUrl || "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
 
              await transcribeOffline(mediaSource, (progress) => {
                  transcriptionProgress = progress;
-                 transcriptionStatus = `Transcribing... ${Math.round(progress)}%`;
+                 transcriptionStatus = `Processing... ${Math.round(progress)}%`;
              }, (subs) => {
                  if (project) {
                      project.subtitles = subs;
@@ -84,20 +75,18 @@
              });
 
          } else {
-             // Online Mode
-             transcriptionStatus = "Uploading to Gemini...";
-             // Call API
-             // const res = await fetch('/api/transcribe', ...);
-             // Simulated for now to prove the flow:
-
+             transcriptionStatus = "Processing in Cloud...";
              await new Promise(r => setTimeout(r, 2000));
-             project.subtitles = [
+             const mockSubs = [
                  { id: '1', startTime: 0, endTime: 2, text: "Welcome to SubGen Pro.", speaker: "Speaker 1", confidence: 0.98 },
                  { id: '2', startTime: 2, endTime: 5, text: "This is an AI-powered subtitle editor.", speaker: "Speaker 1", confidence: 0.95 },
                  { id: '3', startTime: 5, endTime: 8, text: "It uses Gemini or Whisper to transcribe your video.", speaker: "Speaker 2", confidence: 0.88 },
              ];
-             project.status = 'completed';
-             projectStore.updateProject(project.id, { subtitles: project.subtitles, status: 'completed' });
+             if (project) {
+                project.subtitles = mockSubs;
+                project.status = 'completed';
+                projectStore.updateProject(project.id, { subtitles: mockSubs, status: 'completed' });
+             }
              isTranscribing = false;
          }
 
@@ -145,8 +134,6 @@
       const subIndex = project.subtitles.findIndex(s => s.id === id);
       if (subIndex > -1) {
           project.subtitles[subIndex] = { ...project.subtitles[subIndex], ...updates };
-          // Optimistic update
-          // Debounce save?
           projectStore.updateProject(project.id, { subtitles: project.subtitles });
       }
   }
@@ -157,85 +144,184 @@
        projectStore.updateProject(project.id, { subtitles: project.subtitles });
   }
 
+  // Format helpers
+  function formatTime(t: number) {
+      const min = Math.floor(t / 60);
+      const sec = Math.floor(t % 60);
+      return `${min}:${sec.toString().padStart(2, '0')}`;
+  }
 </script>
 
-<div class="flex h-screen flex-col bg-[#090b0f] text-white">
-    <!-- Header -->
-    <header class="flex h-14 items-center justify-between border-b border-white/10 px-4 bg-[#090b0f]">
-        <div class="flex items-center gap-4">
-            <a href="/dashboard" class="text-muted-foreground hover:text-white"><ArrowLeft class="h-4 w-4" /></a>
-            {#if project}
-                <span class="font-semibold">{project.name}</span>
-                <Badge variant="outline" class="ml-2">{mode.toUpperCase()}</Badge>
-            {/if}
-        </div>
-        <div class="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onclick={() => projectStore.saveProjects()}>
-                <Save class="mr-2 h-4 w-4" /> Save
-            </Button>
-            <Button size="sm" class="bg-[#d69e2e] text-black hover:bg-[#d69e2e]/90">
-                <Download class="mr-2 h-4 w-4" /> Export
-            </Button>
-        </div>
-    </header>
+<div class="min-h-screen w-full bg-[#141418] flex items-center justify-center p-4 lg:p-10 font-sans selection:bg-orange-500/30 overflow-hidden relative">
+  <LiquidBackground />
 
-    <div class="flex flex-1 overflow-hidden">
-        {#if isLoading}
-            <div class="flex flex-1 items-center justify-center">
-                <Loader2 class="h-8 w-8 animate-spin text-[#d69e2e]" />
-            </div>
-        {:else if project}
-            <!-- Video Preview Area -->
-            <div class="flex flex-[2] flex-col border-r border-white/10 bg-black relative justify-center items-center">
-                {#if isTranscribing}
-                     <div class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm">
+  <!-- Main Editor Panel -->
+  <GlassPanel class="w-full max-w-7xl h-[90vh]">
+    {#if isLoading}
+        <div class="absolute inset-0 flex items-center justify-center text-white">
+            <Loader2 class="h-8 w-8 animate-spin text-[#d69e2e]" />
+        </div>
+    {:else if project}
+        <!-- Top Navigation Layer -->
+        <div class="absolute top-0 left-0 right-0 z-30 p-6 flex justify-between items-start pointer-events-none">
+          <LiquidButton size="lg" class="pointer-events-auto !bg-[#4A241B]/80 !border-[#E5352B]/30" onclick={() => window.history.back()}>
+            <ArrowLeft size={24} />
+          </LiquidButton>
+
+          <div class="pointer-events-auto px-6 py-2 rounded-full bg-white/5 backdrop-blur-2xl border border-white/15 shadow-[0_8px_32px_rgba(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.1)] flex items-center justify-center transform hover:bg-white/10 transition-all cursor-default">
+            <span class="text-white text-sm font-medium tracking-wide">{project.name}</span>
+          </div>
+
+          <div class="pointer-events-auto flex items-center space-x-3">
+            <LiquidButton onclick={() => projectStore.saveProjects()}><Star size={18} /></LiquidButton>
+            <LiquidButton><Share2 size={18} /></LiquidButton>
+            <LiquidButton onclick={() => alert("Exporting...")}><Download size={18} /></LiquidButton>
+          </div>
+        </div>
+
+        <!-- Left Toolbar -->
+        <div class="absolute top-24 left-6 z-30 flex flex-col space-y-4">
+          {#each [
+            { id: 'subtitles', icon: Type, label: "Subtitles" },
+            { id: 'styles', icon: Sparkles, label: "Styles" },
+            { id: 'translate', icon: Languages, label: "Translate" },
+            { id: 'media', icon: LayoutGrid, label: "Media" }
+          ] as tool (tool.id)}
+            <LiquidButton
+              active={activeTab === tool.id}
+              size="lg"
+              onclick={() => activeTab = tool.id}
+              class="pointer-events-auto"
+            >
+              <tool.icon size={20} strokeWidth={2.5} />
+            </LiquidButton>
+          {/each}
+        </div>
+
+        <!-- Canvas Area (Center + Right) -->
+        <div class="relative flex-1 w-full overflow-hidden flex">
+             <!-- Video Area -->
+            <div class="relative flex-1 bg-black flex items-center justify-center">
+                 <!-- Background Ambient Glow -->
+                 <div class="absolute inset-0 opacity-40 pointer-events-none" style="background: radial-gradient(circle at 35% 45%, #e5352b 0%, #3a1c14 30%, #1a0d0a 60%);"></div>
+
+                 {#if isTranscribing}
+                     <div class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm text-white">
                         <Loader2 class="h-10 w-10 animate-spin text-[#d69e2e] mb-4" />
                         <h3 class="text-xl font-semibold mb-2">{transcriptionStatus}</h3>
-                        <div class="w-64 h-2 bg-white/10 rounded-full overflow-hidden">
-                            <div class="h-full bg-[#d69e2e] transition-all duration-300" style="width: {transcriptionProgress}%"></div>
+                        <div class="w-64 h-1 bg-white/10 rounded-full overflow-hidden">
+                            <div class="h-full bg-[#E5352B] transition-all duration-300" style="width: {transcriptionProgress}%"></div>
                         </div>
                      </div>
-                {/if}
+                 {/if}
 
-                <!-- svelte-ignore a11y_media_has_caption -->
-                <video
+                 <!-- svelte-ignore a11y_media_has_caption -->
+                 <video
                     bind:this={videoEl}
                     src={project.mediaUrl || "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"}
-                    class="max-h-full max-w-full"
+                    class="max-h-[80%] max-w-[80%] z-10 shadow-2xl rounded-lg"
                     ontimeupdate={onTimeUpdate}
                     onloadedmetadata={onMetadata}
-                ></video>
-
-                <!-- Custom Controls (Minimal) -->
-                <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 rounded-full bg-black/50 px-6 py-2 backdrop-blur-md">
-                    <button class="text-white hover:text-[#d69e2e]" onclick={togglePlay}>
-                        {#if isPlaying}<Pause class="h-5 w-5"/>{:else}<Play class="h-5 w-5"/>{/if}
-                    </button>
-                    <span class="text-xs font-mono">{Math.floor(currentTime)}s / {Math.floor(duration)}s</span>
-                </div>
+                 ></video>
             </div>
 
-            <!-- Editor Area -->
-            <div class="flex flex-1 flex-col bg-[#0d1117] min-w-[350px] max-w-[500px]">
-                <div class="p-4 border-b border-white/10">
-                    <h2 class="font-semibold mb-1">Subtitles</h2>
-                    <p class="text-xs text-muted-foreground">{project.subtitles.length} segments</p>
-                </div>
+            <!-- Right Panel (Contextual) -->
+             <!-- We adapt the generic glass panel from reference to hold our Subtitle Editor -->
+            {#if activeTab === 'subtitles'}
+            <div class="relative w-[400px] h-full bg-[#2d150f]/40 backdrop-blur-[30px] border-l border-white/15 shadow-[-32px_0_64px_rgba(0,0,0,0.6)] flex flex-col z-20 pt-24 pb-32">
+                 <div class="px-6 pb-4 border-b border-white/10 flex justify-between items-center">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-inner">
+                            <Type size={14} class="text-white" />
+                        </div>
+                        <span class="text-white font-medium text-sm tracking-wide">Subtitles</span>
+                    </div>
+                 </div>
 
-                <SubtitleEditorComponent
-                    subtitles={project.subtitles}
-                    selectedSubtitleId={selectedSubtitleId}
-                    currentTime={currentTime}
-                    onSelect={(id) => selectedSubtitleId = id}
-                    onUpdate={handleUpdateSub}
-                    onDelete={handleDeleteSub}
-                    onSeek={handleSeek}
-                />
+                 <!-- Embed Existing Subtitle Component, but we need to style it to match -->
+                 <!-- We will wrap it in a div that overrides some styles or we just accept it looks slightly different inside -->
+                 <div class="flex-1 overflow-y-auto px-4 py-2 custom-scrollbar text-white">
+                    <SubtitleEditorComponent
+                        subtitles={project.subtitles}
+                        selectedSubtitleId={selectedSubtitleId}
+                        currentTime={currentTime}
+                        onSelect={(id) => selectedSubtitleId = id}
+                        onUpdate={handleUpdateSub}
+                        onDelete={handleDeleteSub}
+                        onSeek={handleSeek}
+                    />
+                 </div>
             </div>
-        {:else}
-             <div class="flex flex-1 items-center justify-center text-muted-foreground">
-                 Project not found.
+            {/if}
+            {#if activeTab !== 'subtitles'}
+               <div class="relative w-[360px] h-full bg-[#2d150f]/40 backdrop-blur-[30px] border-l border-white/15 flex items-center justify-center z-20">
+                   <p class="text-white/50">Feature coming soon</p>
+               </div>
+            {/if}
+        </div>
+
+        <!-- Timeline Overlay (Bottom) -->
+        <div class="absolute bottom-0 left-0 right-0 z-40 h-28 bg-gradient-to-t from-[#1a0d0a] via-[#3A1C14]/90 to-transparent backdrop-blur-[8px] border-t border-white/10 px-8 flex items-center justify-between">
+
+             <!-- Left Controls -->
+             <div class="flex items-center space-x-4">
+                <LiquidButton onclick={() => handleSeek(currentTime - 5)}><SkipBack size={18} fill="currentColor" /></LiquidButton>
+                <LiquidButton size="lg" class="!bg-white/15 hover:!bg-white/25" onclick={togglePlay}>
+                  {#if isPlaying}
+                     <Pause size={26} fill="currentColor" class="ml-1" />
+                  {:else}
+                     <Play size={26} fill="currentColor" class="ml-1" />
+                  {/if}
+                </LiquidButton>
+                <LiquidButton onclick={() => handleSeek(currentTime + 5)}><SkipForward size={18} fill="currentColor" /></LiquidButton>
              </div>
-        {/if}
-    </div>
+
+             <!-- Time / Scrub -->
+             <div class="flex-1 px-8">
+                 <div class="relative w-full h-12 flex items-center">
+                     <input
+                       type="range"
+                       min="0"
+                       max={duration || 100}
+                       value={currentTime}
+                       oninput={(e) => handleSeek(e.currentTarget.valueAsNumber)}
+                       class="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-[#E5352B]"
+                     />
+                     <div class="absolute top-0 right-0 text-white/50 text-xs font-mono translate-y-[-100%]">
+                        {formatTime(currentTime)} / {formatTime(duration)}
+                     </div>
+                 </div>
+             </div>
+
+             <!-- Right Stats -->
+             <div class="flex items-center space-x-3">
+                <div class="h-11 px-5 rounded-full bg-white/5 backdrop-blur-xl border border-white/10 flex items-center justify-center text-white/80 text-xs font-medium">
+                  {project.subtitles.length} Segments
+                </div>
+                <div class="h-11 px-6 rounded-full bg-white text-[#3A1C14] flex items-center space-x-2 shadow-[0_0_25px_rgba(255,255,255,0.4)] font-bold text-xs">
+                   <Activity size={14} />
+                   <span>{project.language}</span>
+                </div>
+             </div>
+        </div>
+    {:else}
+        <div class="flex items-center justify-center h-full text-white">
+            Project not found.
+        </div>
+    {/if}
+  </GlassPanel>
+
+  <!-- Global Styles for Scrollbar (Injected via style tag or could be in app.css) -->
+  <style>
+    :global(.custom-scrollbar::-webkit-scrollbar) {
+        width: 4px;
+    }
+    :global(.custom-scrollbar::-webkit-scrollbar-track) {
+        background: transparent;
+    }
+    :global(.custom-scrollbar::-webkit-scrollbar-thumb) {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 10px;
+    }
+  </style>
 </div>
