@@ -105,6 +105,9 @@
 
     await projectStore.addProject(newProject);
 
+    // Force a save to ensure persistence before navigation
+    await projectStore.saveProjects();
+
     // Navigate to editor immediately, passing the file context via state or store if possible,
     // or we can redirect to a route that handles the processing.
     // For this architecture, let's redirect to the editor, and the editor will pick up the processing
