@@ -1,0 +1,44 @@
+[
+  {
+    "id": "996a15ed-fe5c-442b-a9be-3383ceef28ed",
+    "name": "URL Import",
+    "createdAt": "2025-12-28T08:35:56.299Z",
+    "updatedAt": "2025-12-28T08:35:56.299Z",
+    "status": "processing",
+    "mediaType": "video",
+    "subtitles": [],
+    "language": "auto",
+    "targetLanguage": "es",
+    "mediaUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    "style": {
+      "fontFamily": "Inter",
+      "fontSize": 24,
+      "color": "#ffffff",
+      "backgroundColor": "rgba(0,0,0,0.5)",
+      "opacity": 1,
+      "position": "bottom",
+      "animation": "fade"
+    }
+  },
+  {
+    "id": "31fd41d0-d5be-4a27-8e4a-dfe53b9f9c23",
+    "name": "URL Import",
+    "createdAt": "2025-12-28T08:34:46.502Z",
+    "updatedAt": "2025-12-28T08:34:46.503Z",
+    "status": "processing",
+    "mediaType": "video",
+    "subtitles": [],
+    "language": "auto",
+    "targetLanguage": "es",
+    "mediaUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    "style": {
+      "fontFamily": "Inter",
+      "fontSize": 24,
+      "color": "#ffffff",
+      "backgroundColor": "rgba(0,0,0,0.5)",
+      "opacity": 1,
+      "position": "bottom",
+      "animation": "fade"
+    }
+  }
+]
