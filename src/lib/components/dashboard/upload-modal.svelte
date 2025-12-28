@@ -8,7 +8,7 @@
   import { Progress } from "$lib/components/ui/progress";
   import { Upload, Link, Loader2, FileVideo, X } from "lucide-svelte";
   import { goto } from "$app/navigation";
-  import { projectStore, type Project } from "$lib/stores/projectStore.svelte";
+  import { projectStore, type Project, DEFAULT_STYLE } from "$lib/stores/projectStore.svelte";
   import { Switch } from "$lib/components/ui/switch";
 
   let { open = $bindable(false) } = $props();
@@ -87,8 +87,10 @@
         status: "processing",
         mediaType: "video",
         subtitles: [],
-        language: language,
-        mediaUrl: mediaUrl || undefined
+        language: "auto",
+        targetLanguage: language === 'auto' ? undefined : language,
+        mediaUrl: mediaUrl || undefined,
+        style: { ...DEFAULT_STYLE }
     };
 
     setIsUploading(true);
@@ -226,17 +228,18 @@
 
       <div class="mt-4 grid gap-4 sm:grid-cols-2">
         <div class="space-y-2">
-          <Label>Primary Language</Label>
+          <Label>Target Language (Translation)</Label>
           <Select.Root type="single" bind:value={language}>
             <Select.Trigger>
-                {language === 'auto' ? 'Auto-detect' : language}
+                {language === 'auto' ? 'Original (No Translation)' : language}
             </Select.Trigger>
             <Select.Content>
-                <Select.Item value="auto">Auto-detect</Select.Item>
+                <Select.Item value="auto">Original (No Translation)</Select.Item>
                 <Select.Item value="en">English</Select.Item>
                 <Select.Item value="es">Spanish</Select.Item>
                 <Select.Item value="fr">French</Select.Item>
                 <Select.Item value="de">German</Select.Item>
+                <Select.Item value="ja">Japanese</Select.Item>
             </Select.Content>
           </Select.Root>
         </div>

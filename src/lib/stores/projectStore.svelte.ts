@@ -9,6 +9,8 @@ export interface Project {
     duration?: number;
     subtitles: Subtitle[];
     language: string;
+    targetLanguage?: string;
+    style: SubtitleStyle;
 }
 
 export interface Subtitle {
@@ -19,6 +21,26 @@ export interface Subtitle {
     speaker?: string;
     confidence?: number;
 }
+
+export interface SubtitleStyle {
+    fontFamily: string;
+    fontSize: number;
+    color: string;
+    backgroundColor: string;
+    opacity: number;
+    position: 'top' | 'middle' | 'bottom';
+    animation: 'none' | 'fade' | 'pop' | 'slide';
+}
+
+export const DEFAULT_STYLE: SubtitleStyle = {
+    fontFamily: 'Inter',
+    fontSize: 24,
+    color: '#ffffff',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    opacity: 1,
+    position: 'bottom',
+    animation: 'fade'
+};
 
 class ProjectStore {
     projects = $state<Project[]>([]);
@@ -46,21 +68,15 @@ class ProjectStore {
                     const serverProjects: Project[] = await res.json();
 
                     // 3. Merge Strategy:
-                    // - Create a map of existing projects by ID
                     const projectMap = new Map<string, Project>();
 
-                    // Add local projects first
                     localProjects.forEach(p => projectMap.set(p.id, p));
 
-                    // Merge server projects
                     serverProjects.forEach(serverP => {
                         const localP = projectMap.get(serverP.id);
                         if (!localP) {
-                            // If not in local, add it
                             projectMap.set(serverP.id, serverP);
                         } else {
-                            // If exists in both, compare updatedAt
-                            // If server is newer, use server. Else keep local (preserves unsynced changes)
                             const serverDate = new Date(serverP.updatedAt).getTime();
                             const localDate = new Date(localP.updatedAt).getTime();
 
@@ -70,16 +86,13 @@ class ProjectStore {
                         }
                     });
 
-                    // Update state with merged list
                     this.projects = Array.from(projectMap.values())
                         .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
-                    // Update local storage with the merged result
                     localStorage.setItem("subgen-projects", JSON.stringify(this.projects));
                 }
             } catch (e) {
                 console.warn("Server unreachable, keeping local data", e);
-                // We already set this.projects = localProjects above, so no action needed.
             }
 
         } catch (e) {
@@ -90,9 +103,11 @@ class ProjectStore {
     }
 
     async addProject(project: Project) {
-        // Add to local state immediately
+        // Ensure styles are initialized
+        if (!project.style) {
+            project.style = { ...DEFAULT_STYLE };
+        }
         this.projects = [project, ...this.projects];
-        // Save (Local + Async Server)
         await this.saveProjects();
     }
 
@@ -107,25 +122,15 @@ class ProjectStore {
     }
 
     async getProject(id: string): Promise<Project | undefined> {
-        // If empty, try loading.
-        // Note: loadProjects handles merging, so calling it again is safe/idempotent-ish.
         if (this.projects.length === 0) {
             await this.loadProjects();
         }
-
-        // If still not found, it might be that loadProjects is async and we need to wait for the merge?
-        // But loadProjects awaits the fetch.
-        // However, if we just navigated from Dashboard, `projects` might already have it from `addProject`.
-        // If we hard-refreshed, `loadProjects` runs.
-
         return this.projects.find(p => p.id === id);
     }
 
     async saveProjects() {
-        // Save to local
         localStorage.setItem("subgen-projects", JSON.stringify(this.projects));
 
-        // Sync to server
         try {
             await fetch("/api/projects", {
                 method: "POST",
